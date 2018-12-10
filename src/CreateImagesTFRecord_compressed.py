@@ -5,6 +5,26 @@ import matplotlib.image as mpimg
 class GenerateTFRecord:
     def __init__(self, labels):
         self.labels = labels
+        self._create_graph()
+
+    # Create graph to convert PNG image data to JPEG data
+    def _create_graph(self):
+        tf.reset_default_graph()
+        self.png_img_pl = tf.placeholder(tf.string)
+        png_enc = tf.image.decode_png(self.png_img_pl, channels=3)
+        # Set how much quality of image you would like to retain while conversion
+        self.png_to_jpeg = tf.image.encode_jpeg(png_enc, format='rgb', quality=90)
+
+    @staticmethod
+    def _is_png_image(filename):
+        ext = os.path.splitext(filename)[1].lower()
+        return ext == '.png'
+
+    # Run graph to convert PNG image data to JPEG data
+    def _convert_png_to_jpeg(self, img):
+        # sess = tf.get_default_session()
+        with tf.Session() as sess:
+            return sess.run(self.png_to_jpeg, feed_dict={self.png_img_pl: img})
 
     def convert_image_folder(self, img_folder, tfrecord_file_name):
         # Get all file names of images present in folder
@@ -19,17 +39,21 @@ class GenerateTFRecord:
     def _convert_image(self, img_path):
         label = self._get_label_with_filename(img_path)
         img_shape = mpimg.imread(img_path).shape
-        filename = os.path.basename(img_path)
+        filename = os.path.basename(img_path).split('.')[0]
 
         # Read image data in terms of bytes
         with tf.gfile.FastGFile(img_path, 'rb') as fid:
             image_data = fid.read()
 
+            # Encode PNG data to JPEG data
+            if self._is_png_image(img_path):
+                image_data = self._convert_png_to_jpeg(image_data)
+
         example = tf.train.Example(features=tf.train.Features(feature={
             'filename': tf.train.Feature(bytes_list=tf.train.BytesList(value=[filename.encode('utf-8')])),
             'rows': tf.train.Feature(int64_list=tf.train.Int64List(value=[img_shape[0]])),
             'cols': tf.train.Feature(int64_list=tf.train.Int64List(value=[img_shape[1]])),
-            'channels': tf.train.Feature(int64_list=tf.train.Int64List(value=[img_shape[2]])),
+            'channels': tf.train.Feature(int64_list=tf.train.Int64List(value=[3])),
             'image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[image_data])),
             'label': tf.train.Feature(int64_list=tf.train.Int64List(value=[label]))
         }))
@@ -41,7 +65,8 @@ class GenerateTFRecord:
         basename = basename.split('_')[0]
         return self.labels[basename]
 
+
 if __name__ == '__main__':
     labels_ = {'cat': 0, 'dog': 1}
     t = GenerateTFRecord(labels_)
-    t.convert_image_folder('../imgs', './data/images.tfrecord')
+    t.convert_image_folder('../imgs', './data/compressed_imags.tfrecord')

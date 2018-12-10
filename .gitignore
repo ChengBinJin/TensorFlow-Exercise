@@ -3,3 +3,4 @@ src/MNIST_data/
 .idea/
 src/data/
 imgs/
+src/ExtractedImages/
