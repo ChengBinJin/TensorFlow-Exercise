@@ -59,8 +59,8 @@ def example02_fn():
     # Read and print data:
     with tf.Session() as sess:
         # Read TFRecord file
-        reader = tf.TFRecordReader()
         filename_queue = tf.train.string_input_producer(['customer_1.tfrecord'])
+        reader = tf.TFRecordReader()
         _, serialized_example = reader.read(filename_queue)
 
         # Define features
@@ -85,9 +85,95 @@ def example02_fn():
             print('{}: {}'.format(name, tensor.eval()))
 
 
+def _extract_features(example):
+    # Define features
+    features = {
+        'Age': tf.FixedLenFeature([], dtype=tf.int64),
+        'Movie': tf.VarLenFeature(dtype=tf.string),
+        'Movie Ratings': tf.VarLenFeature(dtype=tf.float32),
+        'Suggestion': tf.FixedLenFeature([], dtype=tf.string),
+        'Suggestion Purchased': tf.FixedLenFeature([], dtype=tf.float32),
+        'Purchase Price': tf.FixedLenFeature([], dtype=tf.float32)
+    }
 
+    read_data = tf.parse_single_example(serialized=example, features=features)
+    return read_data['Age']
+
+def example03_fn():
+    # filenames = ['customer_1.tfrecord']
+
+    dataset = tf.data.TFRecordDataset('customer_1.tfrecord')
+    dataset.map(_extract_features)
+    dataset = dataset.batch(1)
+    dataset = dataset.shuffle(buffer_size=1)
+    dataset = dataset.repeat(3)
+
+    iterator = dataset.make_one_shot_iterator()
+
+    it = 0
+    # Read and print data:
+    with tf.Session() as sess:
+        next_data = iterator.get_next()
+        try:
+            while True:
+                data = sess.run(next_data)
+
+                # Print features
+                print('data: {}'.format(data))
+                it += 1
+
+        except tf.errors.OutOfRangeError:
+            print('End of batches')
+        finally:
+            print('There are {} number of batches'.format(it))
+
+
+def example04_fn():
+    # Read TFRecord file
+    filename_queue = tf.train.string_input_producer(['customer_1.tfrecord'])
+    reader = tf.TFRecordReader()
+    _, serialized_example = reader.read(filename_queue)
+
+    # Define features
+    read_features = {
+        'Age': tf.FixedLenFeature([], dtype=tf.int64),
+        'Movie': tf.VarLenFeature(dtype=tf.string),
+        'Movie Ratings': tf.VarLenFeature(dtype=tf.float32),
+        'Suggestion': tf.FixedLenFeature([], dtype=tf.string),
+        'Suggestion Purchased': tf.FixedLenFeature([], dtype=tf.float32),
+        'Purchase Price': tf.FixedLenFeature([], dtype=tf.float32)
+    }
+
+    # Extreact features from serialized data
+    read_data = tf.parse_single_example(serialized=serialized_example, features=read_features)
+    data = tf.train.shuffle_batch(read_data, batch_size=1, num_threads=8, capacity=2, min_after_dequeue=1)
+
+    sess = tf.Session()
+
+    # threads for tfrecord
+    coord = tf.train.Coordinator()
+    threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+
+    iter_time = 0
+    try:
+        while iter_time < 10:
+            data_next = sess.run(data)
+            for k in data_next:
+                print('{}: {}'.format(k, data_next[k]))
+
+            iter_time += 1
+
+    except KeyboardInterrupt:
+        coord.request_stop()
+    except Exception as e:
+        coord.request_stop(e)
+    finally:
+        # when done, ask the threads to stop
+        coord.request_stop()
+        coord.join(threads)
 
 if __name__ == '__main__':
     # example01_fn()
-
-    example02_fn()
+    # example02_fn()
+    example03_fn()
+    # example04_fn()
